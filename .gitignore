@@ -1,3 +1,4 @@
 venv
 figure.png
-maps/*
+maps/
+.idea
