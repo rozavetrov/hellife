@@ -11,6 +11,7 @@ class World:
         self.states = np.array([[0, 0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 1, 1, 0, 0, 0, 0, 0]])
         self.rgb_array_white = np.array([255, 255, 255])
         self.rgb_array_black = np.array([0, 0, 0])
+        self.barrier = None
 
     @property
     def width(self):
@@ -24,8 +25,8 @@ class World:
     def time(self):
         return self.map.shape[0]
 
-    def get_neighbours_of_cell(self, x, y):
-        return self.map[self.current_time, y - 1:y + 2, x - 1:x + 2]
+    def get_neighbours_of_cell(self, x, y, t):
+        return self.map[t, y - 1:y + 2, x - 1:x + 2]
 
     def set_initial_state(self, prob=(0.5, 0.5), seed=None):
         if seed:
@@ -33,31 +34,39 @@ class World:
 
         self.map[0] = np.random.choice((0, 1), (self.height, self.width), p=prob)
 
-    def get_new_state_of_cell(self, x, y):
-        neighbours = self.get_neighbours_of_cell(x, y)
+    def get_new_state_of_cell(self, x, y, t):
+        neighbours = self.get_neighbours_of_cell(x, y, t)
 
         return self.rule(neighbours)
 
-    def create(self):
+    def set_new_state(self, map_chunk):
         for t in range(self.time - 1):
-            self.current_time = t
+            for y in range(1, map_chunk.shape[1] - 1):
+                for x in range(1, map_chunk.shape[2] - 1):
+                    map_chunk[t + 1][y][x] = self.get_new_state_of_cell(x, y, t)
+                    # self.rgb_map[t + 1][y][x] = self.rgb_array_white \
+                    #     if self.map[t + 1][y][x] else self.rgb_array_black
 
-            for y in range(1, self.height - 1):
-                for x in range(1, self.width - 1):
-                    self.map[self.current_time + 1][y][x] = self.get_new_state_of_cell(x, y)
-                    self.rgb_map[self.current_time + 1][y][x] = self.rgb_array_white if self.map[self.current_time + 1][y][x] else self.rgb_array_black
+    def get_map_chunk(self, start_h, end_h, start_w, end_w):
+        return self.map[:][start_h:end_h][start_w:end_w]
 
-            self.current_time += 1
+    def get_map_chunks(self, chunk_height, chunk_width):
+        chunks = []
+        step_w = int(self.width/chunk_width)
+        step_h = int(self.height/chunk_height)
 
-        self.current_time = 0
+        start_h = 0
+        start_w = 0
+        while start_h < self.height:
+            end_h = start_h + step_h
+            while start_w < self.width:
+                end_w = start_w + step_w
+                chunks.append(self.get_map_chunk(start_h, end_h, start_w, end_w))
 
-    def to_rgb(self):
-        for t in range(self.time):
-            for y in range(self.height):
-                for x in range(self.width):
-                    self.rgb_map[t, y, x] = np.array([255, 255, 255]) * self.map[t, y, x]
+                start_w += step_w
+            start_h += step_h
 
-        return self.rgb_map
+        return chunks
 
     def rule(self, cells):
         main_cell = cells[1][1]
@@ -65,24 +74,24 @@ class World:
 
         return self.states[main_cell][count_of_alive]
 
-    def write_to_gif(self, filename, folder_path, fps=10):
-        write_gif(self.rgb_map, f"{folder_path}/{filename}", fps=fps)
-
 
 if __name__ == '__main__':
-    WIDTH = 100
+    WIDTH = 160
     HEIGHT = 100
-    TIME = 50
+    TIME = 200
 
     start = time.time()
     world = World(WIDTH, HEIGHT, TIME)
 
     world.set_initial_state(prob=(0.9, 0.1))
-    world.create()
+
+    map_chunks = world.get_map_chunks(HEIGHT, WIDTH/8)
+    for chunk in map_chunks:
+        world.set_new_state(chunk)
 
     end = time.time() - start
 
-    world.write_to_gif(f"test.gif", "./maps", fps=30)
+    write_gif(world.rgb_map, f"./maps/test.gif", fps=10)
     time_to_gif = time.time() - start
 
     print(end, time_to_gif)
